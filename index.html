@@ -1,0 +1,322 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#244A7A">
+<title>保母班表</title>
+<style>
+:root {
+  --navy:#244A7A; --blue:#315B8F; --pale:#EAF2FB; --line:#D7E1EC;
+  --text:#1F2937; --muted:#6B7280; --weekend:#F3F4F6;
+  --plus-bg:#E7F4EA; --plus:#28713D; --minus-bg:#FCE8E6; --minus:#A33D2E;
+}
+*{box-sizing:border-box}
+body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang TC","Noto Sans TC",sans-serif;background:#F7F9FC;color:var(--text)}
+header{background:var(--navy);color:#fff;padding:18px 16px 20px;position:sticky;top:0;z-index:5;box-shadow:0 2px 8px rgba(0,0,0,.12)}
+header h1{font-size:20px;margin:0 0 10px;font-weight:750}
+.today{background:#fff;color:var(--navy);border-radius:14px;padding:13px 14px;font-size:18px;font-weight:750;line-height:1.35}
+.today small{display:block;font-size:12px;color:var(--muted);font-weight:500;margin-top:4px}
+main{max-width:1100px;margin:auto;padding:14px}
+.summary{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:14px}
+.stat{background:#fff;border:1px solid var(--line);border-radius:12px;padding:10px;text-align:center}
+.stat b{display:block;font-size:18px;color:var(--navy)} .stat span{font-size:12px;color:var(--muted)}
+.week{background:#fff;border:1px solid var(--line);border-radius:16px;overflow:hidden;margin-bottom:14px;box-shadow:0 2px 6px rgba(36,74,122,.05)}
+.week-title{background:var(--blue);color:white;padding:10px 12px;display:flex;justify-content:space-between;align-items:center;font-weight:700}
+.week-title small{font-weight:500;opacity:.9}
+.week-grid{display:grid;grid-template-columns:repeat(7,1fr)}
+.day-card{padding:10px;border-right:1px solid var(--line);border-bottom:1px solid var(--line);min-height:145px;background:#fff}
+.day-card:nth-child(7n){border-right:0}
+.day-card.weekend{background:var(--weekend)}
+.day-card.outside{background:#FAFAFA;color:#9CA3AF}
+.day-card.today-highlight{outline:3px solid #F3B64A;outline-offset:-3px;background:#FFF9E8}
+.date-line{display:flex;justify-content:space-between;gap:8px;font-size:12px;color:var(--muted);margin-bottom:8px}
+.date-line strong{font-size:14px;color:var(--navy)}
+.shift{font-size:14px;line-height:1.5;font-weight:650;margin-bottom:7px}
+.shift.rest{font-size:16px;color:#4B5563}
+.meta{display:flex;gap:6px;align-items:center;flex-wrap:wrap;font-size:12px;color:#4B5563;line-height:1.4}
+.badge{padding:2px 7px;border-radius:999px;font-weight:700}
+.badge.plus{background:var(--plus-bg);color:var(--plus)}
+.badge.minus{background:var(--minus-bg);color:var(--minus)}
+.badge.zero{background:#EEF2F7;color:#56606F}
+.note{margin-top:8px;padding-top:7px;border-top:1px dashed #D6DCE5;font-size:12px;line-height:1.45;color:#6A4D14;white-space:pre-line}
+.muted{font-size:12px;color:#9CA3AF}
+.rules{background:#FFF8E6;border:1px solid #EED89B;border-radius:14px;padding:12px 14px;font-size:13px;line-height:1.65;color:#6B5412;margin-bottom:24px}
+.loading,.error{background:#fff;border:1px solid var(--line);border-radius:14px;padding:18px;text-align:center;color:var(--muted)}
+.error{color:#9A3412;background:#FFF7ED;border-color:#FED7AA}
+footer{text-align:center;color:#8B95A5;font-size:11px;padding:0 12px 26px}
+@media(max-width:760px){
+  header{position:relative}
+  main{padding:10px}
+  .today{font-size:17px}
+  .summary{grid-template-columns:repeat(3,1fr)}
+  .week{border-radius:14px}
+  .week-grid{display:block}
+  .day-card{min-height:0;border-right:0;padding:11px 12px}
+  .day-card.outside{display:none}
+  .date-line{margin-bottom:5px}
+  .shift{font-size:16px;margin-bottom:5px}
+  .meta{font-size:12px}
+  .note{font-size:13px}
+}
+</style>
+</head>
+<body>
+<header>
+  <h1 id="pageTitle">保母班表</h1>
+  <div id="today" class="today">今日排班讀取中…</div>
+</header>
+
+<main>
+  <div class="summary">
+    <div class="stat"><b id="plusHours">–</b><span>加班</span></div>
+    <div class="stat"><b id="minusHours">–</b><span>扣抵</span></div>
+    <div class="stat"><b id="netHours">–</b><span>本月淨增減</span></div>
+  </div>
+
+  <div id="scheduleRoot" class="loading">正在從 Google 試算表讀取班表…</div>
+
+  <div class="rules">
+    <b>資料來源：</b>Google 試算表。修改試算表後，重新整理此頁即可取得最新班表。
+  </div>
+</main>
+
+<footer>線上版保母班表｜資料由 Google 試算表同步</footer>
+
+<script>
+const CSV_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vSqa3tTj2jo74GYQGatln-rAAVC4isCJmj4jpwCqCuqGzUmHVeAIgiFbbgGyoJIdLqELfTQKctGfDSW/pub?gid=1198894985&single=true&output=csv";
+
+// 預期欄位：日期、星期、接手人、上班、下班、實際工時、增減時數、排班類型、特殊備註
+const REQUIRED_HEADERS = ["日期","星期","接手人","上班","下班","增減時數","排班類型"];
+
+function parseCSV(text){
+  const rows = [];
+  let row = [], field = "", quoted = false;
+  for(let i=0;i<text.length;i++){
+    const c = text[i], n = text[i+1];
+    if(c === '"'){
+      if(quoted && n === '"'){ field += '"'; i++; }
+      else quoted = !quoted;
+    } else if(c === ',' && !quoted){
+      row.push(field); field = "";
+    } else if((c === '\n' || c === '\r') && !quoted){
+      if(c === '\r' && n === '\n') i++;
+      row.push(field); field = "";
+      if(row.some(v => v.trim() !== "")) rows.push(row);
+      row = [];
+    } else {
+      field += c;
+    }
+  }
+  row.push(field);
+  if(row.some(v => v.trim() !== "")) rows.push(row);
+  return rows;
+}
+
+function normalizeDate(v){
+  v = String(v || "").trim();
+  if(!v) return "";
+  // 支援 2026/09/01、2026-09-01、09/01/2026
+  let m = v.match(/^(\d{4})[\/\-](\d{1,2})[\/\-](\d{1,2})/);
+  if(m) return `${m[1]}-${m[2].padStart(2,"0")}-${m[3].padStart(2,"0")}`;
+  const d = new Date(v);
+  if(!isNaN(d)){
+    return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
+  }
+  return "";
+}
+
+function formatTime(v){
+  v = String(v || "").trim();
+  if(!v) return "";
+  const m = v.match(/(\d{1,2}):(\d{2})/);
+  return m ? `${m[1].padStart(2,"0")}:${m[2]}` : v;
+}
+
+function num(v){
+  const n = parseFloat(String(v ?? "").replace(/[^\d.\-+]/g,""));
+  return Number.isFinite(n) ? n : 0;
+}
+
+function localDateKey(){
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
+}
+
+function md(key){
+  const [y,m,d] = key.split("-");
+  return `${m}/${d}`;
+}
+
+function weekdayShort(dateKey){
+  const names = ["週日","週一","週二","週三","週四","週五","週六"];
+  const [y,m,d] = dateKey.split("-").map(Number);
+  return names[new Date(y,m-1,d).getDay()];
+}
+
+function mondayOf(dateKey){
+  const [y,m,d] = dateKey.split("-").map(Number);
+  const dt = new Date(y,m-1,d);
+  const day = dt.getDay();
+  const diff = day === 0 ? -6 : 1-day;
+  dt.setDate(dt.getDate()+diff);
+  return dt;
+}
+
+function dateKeyFromDate(d){
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
+}
+
+function escapeHtml(s){
+  return String(s ?? "").replace(/[&<>"']/g, ch => ({
+    "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#039;"
+  })[ch]);
+}
+
+function findHeaderRow(rows){
+  for(let i=0;i<Math.min(rows.length,15);i++){
+    const normalized = rows[i].map(v => v.trim());
+    const hits = REQUIRED_HEADERS.filter(h => normalized.includes(h)).length;
+    if(hits >= 5) return i;
+  }
+  return -1;
+}
+
+function rowsToSchedule(rows){
+  const hi = findHeaderRow(rows);
+  if(hi < 0){
+    throw new Error("找不到「日期、星期、接手人、上班、下班、增減時數、排班類型」等欄位。請確認 CSV 發布的是「排班明細」分頁。");
+  }
+
+  const headers = rows[hi].map(v => v.trim());
+  const idx = name => headers.indexOf(name);
+  const noteIndex = headers.includes("特殊備註") ? idx("特殊備註") : idx("備註");
+
+  const items = [];
+  for(const r of rows.slice(hi+1)){
+    const date = normalizeDate(r[idx("日期")]);
+    if(!date) continue;
+
+    items.push({
+      date,
+      weekday: r[idx("星期")]?.trim() || weekdayShort(date),
+      caregiver: r[idx("接手人")]?.trim() || "",
+      start: formatTime(r[idx("上班")]),
+      end: formatTime(r[idx("下班")]),
+      hours: idx("實際工時") >= 0 ? num(r[idx("實際工時")]) : 0,
+      diff: num(r[idx("增減時數")]),
+      type: r[idx("排班類型")]?.trim() || "",
+      note: noteIndex >= 0 ? (r[noteIndex]?.trim() || "") : ""
+    });
+  }
+  return items.sort((a,b) => a.date.localeCompare(b.date));
+}
+
+function render(schedule){
+  if(!schedule.length) throw new Error("CSV 中沒有可辨識的班表資料。");
+
+  const first = schedule[0];
+  const [year, month] = first.date.split("-").map(Number);
+  document.title = `${year} 年 ${month} 月保母班表`;
+  document.getElementById("pageTitle").textContent = `${year} 年 ${month} 月保母班表`;
+
+  const plus = schedule.reduce((s,x) => s + Math.max(0,x.diff), 0);
+  const minus = schedule.reduce((s,x) => s + Math.abs(Math.min(0,x.diff)), 0);
+  const net = schedule.reduce((s,x) => s + x.diff, 0);
+
+  document.getElementById("plusHours").textContent = `${plus}h`;
+  document.getElementById("minusHours").textContent = `${minus}h`;
+  document.getElementById("netHours").textContent = `${net > 0 ? "+" : ""}${net}h`;
+
+  const map = new Map(schedule.map(x => [x.date,x]));
+  const firstMonday = mondayOf(first.date);
+  const lastDate = schedule[schedule.length-1].date;
+  const lastMonday = mondayOf(lastDate);
+
+  let html = "";
+  let weekNo = 1;
+  for(let cursor = new Date(firstMonday); cursor <= lastMonday; cursor.setDate(cursor.getDate()+7), weekNo++){
+    const sunday = new Date(cursor); sunday.setDate(sunday.getDate()+6);
+    html += `<section class="week">
+      <div class="week-title"><span>Week ${weekNo}</span><small>${md(dateKeyFromDate(cursor))}–${md(dateKeyFromDate(sunday))}</small></div>
+      <div class="week-grid">`;
+
+    for(let i=0;i<7;i++){
+      const d = new Date(cursor); d.setDate(d.getDate()+i);
+      const key = dateKeyFromDate(d);
+      const item = map.get(key);
+      const outside = d.getMonth()+1 !== month;
+      const weekend = d.getDay()===0 || d.getDay()===6;
+      const cls = ["day-card", weekend ? "weekend":"", outside ? "outside":""].filter(Boolean).join(" ");
+
+      if(!item){
+        html += `<div class="${cls}" data-date="${key}">
+          <div class="date-line"><span>${weekdayShort(key)}</span><strong>${md(key)}</strong></div>
+          <div class="muted">${outside ? `${month} 月班表外` : "無排班資料"}</div>
+        </div>`;
+        continue;
+      }
+
+      const rest = !item.start || !item.end || item.caregiver === "休假" || item.type === "休假";
+      const badgeClass = item.diff > 0 ? "plus" : item.diff < 0 ? "minus" : "zero";
+      const diffText = `${item.diff > 0 ? "+" : ""}${item.diff}h`;
+
+      html += `<div class="${cls}" data-date="${key}">
+        <div class="date-line"><span>${escapeHtml(item.weekday.replace("星期","週"))}</span><strong>${md(key)}</strong></div>
+        <div class="shift ${rest ? "rest":""}">
+          ${rest ? "休假" : `${escapeHtml(item.start)}–${escapeHtml(item.end)} <b>[${escapeHtml(item.caregiver)}]</b>`}
+        </div>
+        ${rest ? "" : `<div class="meta"><span class="badge ${badgeClass}">${escapeHtml(diffText)}</span><span>${escapeHtml(item.type)}</span></div>`}
+        ${item.note ? `<div class="note">${escapeHtml(item.note)}</div>` : ""}
+      </div>`;
+    }
+
+    html += `</div></section>`;
+  }
+
+  document.getElementById("scheduleRoot").className = "";
+  document.getElementById("scheduleRoot").innerHTML = html;
+
+  const key = localDateKey();
+  const item = map.get(key);
+  const box = document.getElementById("today");
+  const today = new Date();
+  const todayMD = `${String(today.getMonth()+1).padStart(2,"0")}/${String(today.getDate()).padStart(2,"0")}`;
+
+  if(item){
+    if(item.start && item.end && item.caregiver !== "休假"){
+      box.innerHTML = `今日 ${todayMD}　${escapeHtml(item.start)}–${escapeHtml(item.end)} [${escapeHtml(item.caregiver)}]` +
+        `<small>${escapeHtml(item.type || "")}${item.note ? "｜"+escapeHtml(item.note) : ""}</small>`;
+    } else {
+      box.innerHTML = `今日 ${todayMD}　休假<small>${escapeHtml(item.note || "")}</small>`;
+    }
+    const el = document.querySelector(`[data-date="${key}"]`);
+    if(el) el.classList.add("today-highlight");
+  }else{
+    box.innerHTML = `今日 ${todayMD}　本月班表無資料<small>目前顯示：${year}/${String(month).padStart(2,"0")}</small>`;
+  }
+}
+
+async function loadSchedule(){
+  try{
+    const url = CSV_URL + (CSV_URL.includes("?") ? "&" : "?") + "_ts=" + Date.now();
+    const res = await fetch(url, {cache:"no-store"});
+    if(!res.ok) throw new Error(`Google 試算表回傳 ${res.status}`);
+    const text = await res.text();
+    const rows = parseCSV(text);
+    const schedule = rowsToSchedule(rows);
+    render(schedule);
+  }catch(err){
+    console.error(err);
+    document.getElementById("scheduleRoot").className = "error";
+    document.getElementById("scheduleRoot").innerHTML =
+      `<b>班表讀取失敗</b><br><br>${escapeHtml(err.message)}<br><br>` +
+      `請確認 Google 試算表已「發布到網路」，且 CSV 發布的是「排班明細」分頁。`;
+    document.getElementById("today").innerHTML = `班表讀取失敗<small>請檢查 Google 試算表發布設定</small>`;
+  }
+}
+
+loadSchedule();
+</script>
+</body>
+</html>
